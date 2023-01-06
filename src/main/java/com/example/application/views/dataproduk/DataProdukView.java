@@ -1,25 +1,23 @@
 package com.example.application.views.dataproduk;
 
-import com.example.application.data.entity.SamplePerson;
-import com.example.application.data.service.SamplePersonService;
+import com.example.application.data.service.DataProdukService;
 import com.example.application.views.MainLayout;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.checkbox.Checkbox;
-import com.vaadin.flow.component.datepicker.DatePicker;
-import com.vaadin.flow.component.dependency.Uses;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
-import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.html.Image;
+import com.vaadin.flow.component.html.Label;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.Notification.Position;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.splitlayout.SplitLayout;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.data.binder.BeanValidationBinder;
 import com.vaadin.flow.data.binder.ValidationException;
 import com.vaadin.flow.data.renderer.LitRenderer;
@@ -27,41 +25,43 @@ import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouteAlias;
+import com.vaadin.flow.server.StreamResource;
 import com.vaadin.flow.spring.data.VaadinSpringDataHelpers;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @PageTitle("Data Produk")
-@Route(value = "Data-Produk/:samplePersonID?/:action?(edit)", layout = MainLayout.class)
-@Uses(Icon.class)
+@Route(value = "Data-Produk/:dataProdukID?/:action?(edit)", layout = MainLayout.class)
+@RouteAlias(value = "", layout = MainLayout.class)
 public class DataProdukView extends Div implements BeforeEnterObserver {
 
-    private final String SAMPLEPERSON_ID = "samplePersonID";
-    private final String SAMPLEPERSON_EDIT_ROUTE_TEMPLATE = "Data-Produk/%s/edit";
+    private final String DATAPRODUK_ID = "dataProdukID";
+    private final String DATAPRODUK_EDIT_ROUTE_TEMPLATE = "Data-Produk/%s/edit";
 
-    private final Grid<SamplePerson> grid = new Grid<>(SamplePerson.class, false);
+    private final Grid<DataProduk> grid = new Grid<>(DataProduk.class, false);
 
-    private TextField firstName;
-    private TextField lastName;
-    private TextField email;
-    private TextField phone;
-    private DatePicker dateOfBirth;
-    private TextField occupation;
-    private TextField role;
-    private Checkbox important;
+    private TextField nama;
+    private TextField harga;
+    private Upload gambar;
+    private Image gambarPreview;
+    private TextField detail;
 
     private final Button cancel = new Button("Cancel");
     private final Button save = new Button("Save");
 
-    private final BeanValidationBinder<SamplePerson> binder;
+    private final BeanValidationBinder<DataProduk> binder;
 
-    private SamplePerson samplePerson;
+    private DataProduk dataProduk;
 
-    private final SamplePersonService samplePersonService;
+    private final DataProdukService dataProdukService;
 
-    public DataProdukView(SamplePersonService samplePersonService) {
-        this.samplePersonService = samplePersonService;
+    public DataProdukView(DataProdukService dataProdukService) {
+        this.dataProdukService = dataProdukService;
         addClassNames("data-produk-view");
 
         // Create UI
@@ -73,31 +73,29 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
         add(splitLayout);
 
         // Configure Grid
-        grid.addColumn("firstName").setAutoWidth(true);
-        grid.addColumn("lastName").setAutoWidth(true);
-        grid.addColumn("email").setAutoWidth(true);
-        grid.addColumn("phone").setAutoWidth(true);
-        grid.addColumn("dateOfBirth").setAutoWidth(true);
-        grid.addColumn("occupation").setAutoWidth(true);
-        grid.addColumn("role").setAutoWidth(true);
-        LitRenderer<SamplePerson> importantRenderer = LitRenderer.<SamplePerson>of(
-                "<vaadin-icon icon='vaadin:${item.icon}' style='width: var(--lumo-icon-size-s); height: var(--lumo-icon-size-s); color: ${item.color};'></vaadin-icon>")
-                .withProperty("icon", important -> important.isImportant() ? "check" : "minus").withProperty("color",
-                        important -> important.isImportant()
-                                ? "var(--lumo-primary-text-color)"
-                                : "var(--lumo-disabled-text-color)");
+        grid.addColumn("nama").setAutoWidth(true);
+        grid.addColumn("harga").setAutoWidth(true);
+        LitRenderer<DataProduk> gambarRenderer = LitRenderer.<DataProduk>of(
+                        "<span style='border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; width: 64px; height: 64px'><img style='max-width: 100%' src=${item.gambar} /></span>")
+                .withProperty("gambar", item -> {
+                    if (item != null && item.getGambar() != null) {
+                        return "data:image;base64," + Base64.getEncoder().encodeToString(item.getGambar());
+                    } else {
+                        return "";
+                    }
+                });
+        grid.addColumn(gambarRenderer).setHeader("Gambar").setWidth("96px").setFlexGrow(0);
 
-        grid.addColumn(importantRenderer).setHeader("Important").setAutoWidth(true);
-
-        grid.setItems(query -> samplePersonService.list(
-                PageRequest.of(query.getPage(), query.getPageSize(), VaadinSpringDataHelpers.toSpringDataSort(query)))
+        grid.addColumn("detail").setAutoWidth(true);
+        grid.setItems(query -> dataProdukService.list(
+                        PageRequest.of(query.getPage(), query.getPageSize(), VaadinSpringDataHelpers.toSpringDataSort(query)))
                 .stream());
         grid.addThemeVariants(GridVariant.LUMO_NO_BORDER);
 
         // when a row is selected or deselected, populate form
         grid.asSingleSelect().addValueChangeListener(event -> {
             if (event.getValue() != null) {
-                UI.getCurrent().navigate(String.format(SAMPLEPERSON_EDIT_ROUTE_TEMPLATE, event.getValue().getId()));
+                UI.getCurrent().navigate(String.format(DATAPRODUK_EDIT_ROUTE_TEMPLATE, event.getValue().getId()));
             } else {
                 clearForm();
                 UI.getCurrent().navigate(DataProdukView.class);
@@ -105,11 +103,13 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
         });
 
         // Configure Form
-        binder = new BeanValidationBinder<>(SamplePerson.class);
+        binder = new BeanValidationBinder<>(DataProduk.class);
 
         // Bind fields. This is where you'd define e.g. validation rules
 
         binder.bindInstanceFields(this);
+
+        attachImageUpload(gambar, gambarPreview);
 
         cancel.addClickListener(e -> {
             clearForm();
@@ -118,11 +118,11 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
 
         save.addClickListener(e -> {
             try {
-                if (this.samplePerson == null) {
-                    this.samplePerson = new SamplePerson();
+                if (this.dataProduk == null) {
+                    this.dataProduk = new DataProduk();
                 }
-                binder.writeBean(this.samplePerson);
-                samplePersonService.update(this.samplePerson);
+                binder.writeBean(this.dataProduk);
+                dataProdukService.update(this.dataProduk);
                 clearForm();
                 refreshGrid();
                 Notification.show("Data updated");
@@ -140,15 +140,14 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
 
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
-        Optional<Long> samplePersonId = event.getRouteParameters().get(SAMPLEPERSON_ID).map(Long::parseLong);
-        if (samplePersonId.isPresent()) {
-            Optional<SamplePerson> samplePersonFromBackend = samplePersonService.get(samplePersonId.get());
-            if (samplePersonFromBackend.isPresent()) {
-                populateForm(samplePersonFromBackend.get());
+        Optional<Long> dataProdukId = event.getRouteParameters().get(DATAPRODUK_ID).map(Long::parseLong);
+        if (dataProdukId.isPresent()) {
+            Optional<DataProduk> dataProdukFromBackend = dataProdukService.get(dataProdukId.get());
+            if (dataProdukFromBackend.isPresent()) {
+                populateForm(dataProdukFromBackend.get());
             } else {
-                Notification.show(
-                        String.format("The requested samplePerson was not found, ID = %s", samplePersonId.get()), 3000,
-                        Notification.Position.BOTTOM_START);
+                Notification.show(String.format("The requested dataProduk was not found, ID = %s", dataProdukId.get()),
+                        3000, Notification.Position.BOTTOM_START);
                 // when a row is selected but the data is no longer available,
                 // refresh grid
                 refreshGrid();
@@ -166,15 +165,16 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
         editorLayoutDiv.add(editorDiv);
 
         FormLayout formLayout = new FormLayout();
-        firstName = new TextField("First Name");
-        lastName = new TextField("Last Name");
-        email = new TextField("Email");
-        phone = new TextField("Phone");
-        dateOfBirth = new DatePicker("Date Of Birth");
-        occupation = new TextField("Occupation");
-        role = new TextField("Role");
-        important = new Checkbox("Important");
-        formLayout.add(firstName, lastName, email, phone, dateOfBirth, occupation, role, important);
+        nama = new TextField("Nama");
+        harga = new TextField("Harga");
+        Label gambarLabel = new Label("Gambar");
+        gambarPreview = new Image();
+        gambarPreview.setWidth("100%");
+        gambar = new Upload();
+        gambar.getStyle().set("box-sizing", "border-box");
+        gambar.getElement().appendChild(gambarPreview.getElement());
+        detail = new TextField("Detail");
+        formLayout.add(nama, harga, gambarLabel, gambar, detail);
 
         editorDiv.add(formLayout);
         createButtonLayout(editorLayoutDiv);
@@ -198,6 +198,26 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
         wrapper.add(grid);
     }
 
+    private void attachImageUpload(Upload upload, Image preview) {
+        ByteArrayOutputStream uploadBuffer = new ByteArrayOutputStream();
+        upload.setAcceptedFileTypes("image/*");
+        upload.setReceiver((fileName, mimeType) -> {
+            uploadBuffer.reset();
+            return uploadBuffer;
+        });
+        upload.addSucceededListener(e -> {
+            StreamResource resource = new StreamResource(e.getFileName(),
+                    () -> new ByteArrayInputStream(uploadBuffer.toByteArray()));
+            preview.setSrc(resource);
+            preview.setVisible(true);
+            if (this.dataProduk == null) {
+                this.dataProduk = new DataProduk();
+            }
+            this.dataProduk.setGambar(uploadBuffer.toByteArray());
+        });
+        preview.setVisible(false);
+    }
+
     private void refreshGrid() {
         grid.select(null);
         grid.getDataProvider().refreshAll();
@@ -207,9 +227,16 @@ public class DataProdukView extends Div implements BeforeEnterObserver {
         populateForm(null);
     }
 
-    private void populateForm(SamplePerson value) {
-        this.samplePerson = value;
-        binder.readBean(this.samplePerson);
+    private void populateForm(DataProduk value) {
+        this.dataProduk = value;
+        binder.readBean(this.dataProduk);
+        this.gambarPreview.setVisible(value != null);
+        if (value == null || value.getGambar() == null) {
+            this.gambar.clearFileList();
+            this.gambarPreview.setSrc("");
+        } else {
+            this.gambarPreview.setSrc("data:image;base64," + Base64.getEncoder().encodeToString(value.getGambar()));
+        }
 
     }
 }
