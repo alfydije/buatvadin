@@ -1,5 +1,6 @@
 package com.example.application.views.dataproduk;
 
+import com.example.application.data.entity.DataProduk;
 import com.example.application.data.service.DataProdukService;
 import com.example.application.views.MainLayout;
 import com.vaadin.flow.component.UI;
